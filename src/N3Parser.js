@@ -37,6 +37,13 @@ export default class N3Parser {
     this._lexer = options.lexer || new N3Lexer({ lineMode: isLineMode, n3: isN3 });
     // Disable explicit quantifiers by default
     this._explicitQuantifiers = !!options.explicitQuantifiers;
+
+    // === New: recordPositions Option ===
+    this._recordPositions = !!options.recordPositions;
+    if (this._recordPositions) {
+      // Enable line/column tracking in the lexer
+      this._lexer.trackPosition = true;
+    }
   }
 
   // ## Static class methods
@@ -902,6 +909,22 @@ export default class N3Parser {
 
   // ### `_emit` sends a quad through the callback
   _emit(subject, predicate, object, graph) {
+    if (this._recordPositions) {
+      // The lexer stores the most recent token in `this._lexer.previousToken`
+      const token = this._lexer.previousToken;
+      if (token) {
+        const position = {
+          line: token.line,
+          start: token.start,
+          end: token.end,
+        };
+        // Option 1: Attach to a 'position' property
+        if (subject) subject.position = position;
+        if (predicate) predicate.position = position;
+        if (object) object.position = position;
+        if (graph) graph.position = position;
+      }
+    }
     this._callback(null, this._factory.quad(subject, predicate, object, graph || this.DEFAULTGRAPH));
   }
 
