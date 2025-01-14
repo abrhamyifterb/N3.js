@@ -928,7 +928,7 @@ export default class N3Parser {
     this._callback(null, this._factory.quad(subject, predicate, object, graph || this.DEFAULTGRAPH));
   }
 
-  // ### `_error` emits an error message through the callback
+  // ###  `_error` emits an error message through the callback
   _error(message, token) {
     const err = new Error(`${message} on line ${token.line}.`);
     err.context = {
