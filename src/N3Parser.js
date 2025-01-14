@@ -54,6 +54,14 @@ export default class N3Parser {
   }
 
   // ## Private methods
+  _attachTermPosition(term, token) {
+    if (!this._recordPositions || !token) return;
+    term.position = {
+      line:  token.line,
+      start: token.start,
+      end:   token.end,
+    };
+  }
 
   // ### `_setBase` sets the base IRI to resolve relative IRIs
   _setBase(baseIRI) {
@@ -188,6 +196,10 @@ export default class N3Parser {
     default:
       return this._error(`Expected entity but got ${token.type}`, token);
     }
+
+    // Attaching position to terms
+    this._attachTermPosition(value, token);
+
     // In N3 mode, replace the entity if it is quantified
     if (!quantifier && this._n3Mode && (value.id in this._quantified))
       value = this._quantified[value.id];
@@ -241,7 +253,7 @@ export default class N3Parser {
         return this._completeSubjectLiteral;
       }
       else
-        this._subject = this._factory.literal(token.value, this._factory.namedNode(token.prefix));
+        this._subject = this._literal(token.value, this._factory.namedNode(token.prefix));
 
       break;
     case '<<':
@@ -314,7 +326,7 @@ export default class N3Parser {
       }
       // Pre-datatyped string literal (prefix stores the datatype)
       else
-        this._object = this._factory.literal(token.value, this._factory.namedNode(token.prefix));
+        this._object = this._literal(token.value, this._factory.namedNode(token.prefix));
       break;
     case '[':
       // Start a new quad with a new blank node as subject
@@ -469,7 +481,7 @@ export default class N3Parser {
       }
       // Pre-datatyped string literal (prefix stores the datatype)
       else {
-        item = this._factory.literal(token.value, this._factory.namedNode(token.prefix));
+        item = this._literal(token.value, this._factory.namedNode(token.prefix));
         next = this._getContextEndReader();
       }
       break;
@@ -528,10 +540,20 @@ export default class N3Parser {
     return this._completeObjectLiteral(token, true);
   }
 
+  _literal(value, datatypeOrLang, token) {
+    // Create the literal with a possible datatype/lang
+    const lit = (datatypeOrLang) ? this._factory.literal(value, datatypeOrLang)
+      : this._factory.literal(value);
+
+    // Attach position if needed
+    this._attachTermPosition(lit, token);
+    return lit;
+  }
+
   // ### `_completeLiteral` completes a literal with an optional datatype or language
   _completeLiteral(token) {
     // Create a simple string literal by default
-    let literal = this._factory.literal(this._literalValue);
+    let literal = this._literal(this._literalValue);
 
     switch (token.type) {
     // Create a datatyped literal
@@ -539,12 +561,12 @@ export default class N3Parser {
     case 'typeIRI':
       const datatype = this._readEntity(token);
       if (datatype === undefined) return; // No datatype means an error occurred
-      literal = this._factory.literal(this._literalValue, datatype);
+      literal = this._literal(this._literalValue, datatype);
       token = null;
       break;
     // Create a language-tagged string
     case 'langcode':
-      literal = this._factory.literal(this._literalValue, token.value);
+      literal = this._literal(this._literalValue, token.value);
       token = null;
       break;
     }
@@ -909,22 +931,6 @@ export default class N3Parser {
 
   // ### `_emit` sends a quad through the callback
   _emit(subject, predicate, object, graph) {
-    if (this._recordPositions) {
-      // The lexer stores the most recent token in `this._lexer.previousToken`
-      const token = this._lexer.previousToken;
-      if (token) {
-        const position = {
-          line: token.line,
-          start: token.start,
-          end: token.end,
-        };
-        // Option 1: Attach to a 'position' property
-        if (subject) subject.position = position;
-        if (predicate) predicate.position = position;
-        if (object) object.position = position;
-        if (graph) graph.position = position;
-      }
-    }
     this._callback(null, this._factory.quad(subject, predicate, object, graph || this.DEFAULTGRAPH));
   }
 
